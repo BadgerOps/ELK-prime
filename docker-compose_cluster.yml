@@ -1,0 +1,53 @@
+elasticmaster:
+    image: elasticsearch:latest
+    command: "elasticsearch -Des.cluster.name=elastic_cluster -Des.node.master=true -Des.node.data=false"
+    environment:
+       - ES_HEAP_SIZE=512m
+    volumes:
+      - /share/docker/elk/elastic/plugins:/usr/share/elasticsearch/plugins
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+
+elasticsearch1:
+    image: elasticsearch:latest
+    command: "elasticsearch -Des.cluster.name=elastic_cluster -Des.discovery.zen.ping.unicast.hosts=elasticmaster"
+    links:
+      - elasticmaster
+    volumes:
+      - "/share/docker/elk/elastic/data"
+    environment:
+       - ES_HEAP_SIZE=512m
+elasticsearch2:
+    image: elasticsearch:latest
+    command: "elasticsearch -Des.cluster.name=elastic_cluster -Des.discovery.zen.ping.unicast.hosts=elasticmaster"
+    links:
+      - elasticmaster
+    volumes:
+      - "/share/docker/elk/elastic/data"
+    environment:
+       - ES_HEAP_SIZE=512m
+
+logstash:
+  image: logstash:latest
+  restart: always
+  command: logstash -f /etc/logstash/config/logstash.conf
+  volumes:
+    - /share/docker/elk/logstash:/etc/logstash
+  ports:
+    - "5000:5000"
+    - "5140:5140/udp"
+  links:
+    - elasticmaster
+
+kibana:
+  image: kibana:4.5.4
+  restart: always
+  volumes:
+    - /share/docker/elk/kibana/config:/opt/kibana/config
+  ports:
+    - "5601:5601"
+  environment:
+    - ELASTICSEARCH_URL=http://elasticmaster:9200
+  links:
+    - elasticmaster

@@ -1,0 +1,91 @@
+# GROK match pattern for logstash.conf filter: %{LOG_DATA}%{IP_SPECIFIC_DATA}%{IP_DATA}%{PROTOCOL_DATA}
+
+# GROK Custom Patterns (add to patterns directory and reference in GROK filter for pfSense events):
+
+# GROK Patterns for pfSense 2.2 Logging Format
+#
+# Created 27 Jan 2015 by J. Pisano (Handles TCP, UDP, and ICMP log entries)
+# Edited 14 Feb 2015 by E. Paul
+#
+# Usage: Use with following GROK match pattern
+#
+# %{LOG_DATA}%{IP_SPECIFIC_DATA}%{IP_DATA}%{PROTOCOL_DATA}
+
+LOG_DATA (%{INT:rule}),(%{INT:sub_rule}),,(%{INT:tracker}),(%{WORD:iface}),(%{WORD:reason}),(%{WORD:action}),(%{WORD:direction}),(%{INT:ip_ver}),
+
+IP_SPECIFIC_DATA (%{IPv4_SPECIFIC_DATA}|%{IPv6_SPECIFIC_DATA})
+
+IPv4_SPECIFIC_DATA (%{BASE16NUM:tos}),,(%{INT:ttl}),(%{INT:id}),(%{INT:offset}),(%{WORD:flags}),(%{INT:proto_id}),(%{WORD:proto}),
+
+IPv6_SPECIFIC_DATA (%{BASE16NUM:class}),(%{DATA:flow_label}),(%{INT:hop_limit}),(%{WORD:proto}),(%{INT:proto_id}),
+
+IP_DATA (%{INT:length}),(%{IP:src_ip}),(%{IP:dest_ip}),
+
+PROTOCOL_DATA (%{TCP_DATA}|%{UDP_DATA}|%{ICMP_DATA})
+
+TCP_DATA (%{INT:src_port}),(%{INT:dest_port}),(%{INT:data_length}),(%{WORD:tcp_flags}),(%{INT:sequence_number}),(%{INT:ack_number}),(%{INT:tcp_window}),(%{DATA:urg_data}),(%{DATA:tcp_options})
+
+UDP_DATA (%{INT:src_port}),(%{INT:dest_port}),(%{INT:data_length})
+
+ICMP_DATA (%{ICMP_TYPE}%{ICMP_RESPONSE})
+
+ICMP_TYPE (?<icmp_type>(request|reply|unreachproto|unreachport|unreach|timeexceed|paramprob|redirect|maskreply|needfrag|tstamp|tstampreply)),
+
+ICMP_RESPONSE (%{ICMP_ECHO_REQ_REPLY}|%{ICMP_UNREACHPORT}| %{ICMP_UNREACHPROTO}|%{ICMP_UNREACHABLE}|%{ICMP_NEED_FLAG}|%{ICMP_TSTAMP}|%{ICMP_TSTAMP_REPLY})
+
+ICMP_ECHO_REQ_REPLY (%{INT:icmp_echo_id}),(%{INT:icmp_echo_sequence})
+
+ICMP_UNREACHPORT (%{IP:icmp_unreachport_dest_ip}),(%{WORD:icmp_unreachport_protocol}),(%{INT:icmp_unreachport_port})
+
+ICMP_UNREACHPROTO (%{IP:icmp_unreach_dest_ip}),(%{WORD:icmp_unreachproto_protocol})
+
+ICMP_UNREACHABLE (%{GREEDYDATA:icmp_unreachable})
+
+ICMP_NEED_FLAG (%{IP:icmp_need_flag_ip}),(%{INT:icmp_need_flag_mtu})
+
+ICMP_TSTAMP (%{INT:icmp_tstamp_id}),(%{INT:icmp_tstamp_sequence})
+
+ICMP_TSTAMP_REPLY (%{INT:icmp_tstamp_reply_id}),(%{INT:icmp_tstamp_reply_sequence}),(%{INT:icmp_tstamp_reply_otime}),(%{INT:icmp_tstamp_reply_rtime}),(%{INT:icmp_tstamp_reply_ttime})
+
+
+######## PROGRAMS #########
+#DHCPD
+PF_DHCPD_ERRORS (Unable to add forward map)
+PF_DHCPD_ACTIONS (DHCPACK|DHCPREQUEST)
+PF_DHCPD ^%{PF_DHCPD_ACTIONS:dhcpd_action} (on|for) %{IP:client_lease_ip} (to|from) %{NOTSPACE:client_lease_mac}( \(%{NOTSPACE:client_name}\))? via %{WORD:dhcp_int}
+PF_DHCPD_LOG_1 %{PF_DHCPD_ERRORS:dhcpd_error} from %{NOTSPACE:client_name} to %{IP:client_lease_ip}: %{GREEDYDATA:error_reason}
+PF_LEASE_FILE_ACTIONS (deleted host decls|new dynamic host decls|leases)
+PF_DHCPD_LOG_2 Wrote %{NUMBER:number_of_line} %{PF_LEASE_FILE_ACTIONS:lease_file_action} to leases file.
+PF_DHCPD_LOG %{PF_DHCPD_LOG_1}|%{PF_DHCPD_LOG_2}
+#MATCHER
+PFSENSE_DHCPD %{PF_DHCPD}|%{PF_DHCPD_LOG}
+
+
+
+
+####Openvpn###
+#Specifici
+PF_OVPN_1 ^%{PF_OVPN_ID} Control Channel: %{NOTSPACE:ovpn_control_channel}, cipher %{GREEDYDATA:opvn_cypher}
+PF_OVPN_2 ^%{PF_OVPN_ID} Data Channel %{PF_OVPN_DATA_CH_ACT}: Cipher '%{GREEDYDATA:ovpn_cypher}' initialized with %{NUMBER:ovpn_cypher_key_length} bit key
+PF_OVPN_3 ^%{PF_OVPN_ID} Data Channel %{PF_OVPN_DATA_CH_ACT}: Using %{PF_OVPN_MESSAGE_BIT} bit message hash '%{NOTSPACE:ovpn_hash_type}' for %{WORD:ovpn_type_authentication} authentication
+PF_OVPN_4 ^%{PF_OVPN_ID} Data Channel Encrypt: Using 160 bit message hash 'SHA1' for HMAC authentication
+PF_OVPN_5 ^%{PF_OVPN_ID} TLS: Initial packet from [AF_INET]212.97.35.10:58874, sid=14c651e9 e8a35ccd
+PF_OVPN_6 ^%{PF_OVPN_ID} MULTI: Learn: %{IP:client_transport_ip} -> %{PF_OVPN_ID}
+#PF_OVPN_7 ^MANAGEMENT: CMD '%{GREEDYDATA:ovpn_command}'
+PF_OVPN_7 ^MANAGEMENT: (CMD ')?%{GREEDYDATA:ovpn_message}(')?
+PF_OVPN_8 ^%{PF_OVPN_ID} %{WORD:opvn_command}: Received control message: '%{GREEDYDATA:ovpn_control_message}'
+PF_OVPN_9 ^user '%{NOTSPACE:client_username}' %{GREEDYDATA:openvpn_message}
+PF_OVPN_10 ^%{PF_OVPN_ID} MULTI: primary virtual IP for %{PF_OVPN_ID}: %{IP:ovpn_primary_vip}
+PF_OVPN_11 ^%{PF_OVPN_ID} (?<ovpn_command>SENT CONTROL) \[%{NOTSPACE}\]: '%{GREEDYDATA:ovpn_control_message}' \(status=%{NUMBER:ovpn_command_result}\)
+
+#Generici
+PF_OVPN_98 ^%{NOTSPACE:client_username}/%{IP:client_ip}:%{NUMBER:client_port} %{GREEDYDATA:openvpn_message}
+PF_OVPN_99 ^%{IP:client_ip}:%{NUMBER:client_port} %{GREEDYDATA:openvpn_message}
+
+#Variabili
+PF_OVPN_DATA_CH_ACT (?<data_channel_action>Decrypt|Encrypt)
+PF_OVPN_MESSAGE_BIT %{NUMBER:message_bit_length}
+PF_OVPN_ID (%{IP:client_ip}:%{NUMBER:client_port}|%{NOTSPACE:client_username}/%{IP:client_ip}:%{NUMBER:client_port})
+
+#Matcher (PF_OVPN)
+PF_OVPN %{PF_OVPN_1}|%{PF_OVPN_2}|%{PF_OVPN_3}|%{PF_OVPN_4}|%{PF_OVPN_5}|%{PF_OVPN_6}|%{PF_OVPN_7}|%{PF_OVPN_8}|%{PF_OVPN_9}|%{PF_OVPN_10}|%{PF_OVPN_11}|%{PF_OVPN_98}|%{PF_OVPN_99}

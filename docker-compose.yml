@@ -1,0 +1,35 @@
+elasticsearch:
+  image: elasticsearch:latest
+  restart: always
+  volumes:
+    - /share/docker/elk/elastic/plugins:/usr/share/elasticsearch/plugins
+    - /share/docker/elk/elastic/data:/usr/share/elasticsearch/data
+  ports:
+    - "9200:9200"
+    - "127.0.0.1:9300:9300"
+
+
+
+logstash:
+  image: logstash:latest
+  restart: always
+  command: logstash -f /etc/logstash/config/logstash.conf
+  volumes:
+    - /share/docker/elk/logstash:/etc/logstash
+  ports:
+    - "5000:5000"
+    - "5140:5140/udp"
+  links:
+    - elasticsearch
+
+kibana:
+  image: kibana:4.5.4
+  restart: always
+  volumes:
+    - /share/docker/elk/kibana/config:/opt/kibana/config
+  ports:
+    - "5601:5601"
+  environment:
+    - ELASTICSEARCH_URL=http://elasticsearch:9200
+  links:
+    - elasticsearch
